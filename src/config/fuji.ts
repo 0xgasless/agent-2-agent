@@ -1,10 +1,9 @@
 /**
  * Avalanche Fuji Testnet Configuration
- * Imported from @0xgasless/agent-sdk to ensure we use the canonical contract addresses
+ * Imported from @0xgasless/agent-sdk to ensure we use the canonical contract addresses.
  */
 import { fujiConfig as sdkFujiConfig } from '@0xgasless/agent-sdk';
 
-// Re-export SDK config
 export const fujiConfig = sdkFujiConfig;
 
 // Convenience constants derived from SDK config
