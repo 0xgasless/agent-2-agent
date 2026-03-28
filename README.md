@@ -27,7 +27,7 @@ Every step uses real on-chain infrastructure:
 ```
 ┌─────────────────────────────────────────────────┐
 │  Owner (You)                                    │
-│  Privy-managed browser wallet                   │
+│  0xGas-managed embedded wallet                  │
 │  Funds agents with AVAX + USDT                  │
 └──────────┬─────────────────────┬────────────────┘
            │ fund                │ fund
@@ -48,7 +48,7 @@ Every step uses real on-chain infrastructure:
 
 | Wallet | Key Management | Purpose |
 |--------|---------------|---------|
-| Owner | Privy (no private key exposed) | Authenticate, fund agents, withdraw earnings |
+| Owner | @0xgasless/core (KMS-backed) | Authenticate, fund agents, withdraw earnings |
 | Agent A | `ethers.Wallet` in localStorage | Autonomous signing for registration + payments |
 | Agent B | `ethers.Wallet` in localStorage | Autonomous signing for registration + receiving |
 
@@ -58,7 +58,7 @@ Agent wallets are generated once and persisted in `localStorage` so they survive
 
 - **React + TypeScript + Vite** — Frontend framework
 - **Tailwind CSS + Shadcn UI** — Styling and components
-- **Privy** — Wallet authentication (email, Google, or external wallet)
+- @0xgasless/core — Secure embedded wallet SDK (email/social login)
 - **ethers.js v6** — Blockchain interaction
 - **@0xgasless/agent-sdk** — Agent identity (ERC-8004) and gasless payments (x402)
 - **OpenRouter** — AI conversation engine (GPT-4o-mini)
@@ -66,7 +66,7 @@ Agent wallets are generated once and persisted in `localStorage` so they survive
 ## Prerequisites
 
 - [Bun](https://bun.sh/) (or Node.js 18+)
-- A [Privy](https://privy.io/) app ID (free tier works)
+- A [0xGas](https://0xgas.dev) API key (free tier works)
 - An [OpenRouter](https://openrouter.ai/) API key
 - Testnet AVAX from the [Avalanche Faucet](https://faucet.avalanche.org/)
 
@@ -102,7 +102,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ### 4. Use the demo
 
-1. **Log in** with email, Google, or connect a wallet via Privy
+1. **Log in** with email via 0xGas embedded wallet
 2. **Fund agents** — Use the sidebar buttons to send AVAX (for gas) and USDT (for payments) to each agent
 3. **Register agents** — Each agent mints an ERC-8004 identity NFT on Fuji
 4. **Start conversation** — Watch the agents network, negotiate, deliver work, and pay each other
@@ -156,7 +156,7 @@ The conversation uses phase-based system prompts (networking → discovery → n
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `VITE_PRIVY_APP_ID` | Yes | Your Privy application ID |
+| `VITE_0XGAS_API_KEY` | Yes | Your 0xGas application API key |
 | `VITE_OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI conversations |
 
 ## Contracts (Avalanche Fuji Testnet)

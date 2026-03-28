@@ -81,6 +81,8 @@ export function useAgent(name: 'agentA' | 'agentB') {
       console.log(`🔐 [${name}] Initializing agent wallet...`);
       
       // Create SDK with signer
+      console.log(`📡 [${name}] Network config:`, fujiConfig.networks);
+      
       const agentSDK = new AgentSDK({
         networks: fujiConfig.networks,
         defaultNetwork: fujiConfig.defaultNetwork,
@@ -88,6 +90,7 @@ export function useAgent(name: 'agentA' | 'agentB') {
         provider,
       });
       
+      console.log(`✅ [${name}] AgentSDK instance created`);
       setSDK(agentSDK);
       
       const address = await agentSDK.getAddress();
@@ -99,8 +102,9 @@ export function useAgent(name: 'agentA' | 'agentB') {
       // Check on-chain registration via direct contract view calls
       // (no event logs — works with any RPC, no block-range limits)
       try {
-        console.log(`🔍 [${name}] Checking on-chain registration...`);
+        console.log(`🔍 [${name}] Checking on-chain registration for address: ${address}...`);
         const agentId = await findAgentIdOnChain(address, provider);
+        console.log(`🔍 [${name}] findAgentIdOnChain result:`, agentId);
 
         if (agentId) {
           setState(prev => ({
@@ -115,6 +119,7 @@ export function useAgent(name: 'agentA' | 'agentB') {
         }
       } catch (err: any) {
         console.warn(`⚠️ [${name}] Could not verify on-chain registration:`, err.message);
+        console.error(err);
       }
     } catch (error: any) {
       console.error(`Error initializing ${name}:`, error.message);

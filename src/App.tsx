@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PrivyProvider, usePrivy, useWallets } from '@privy-io/react-auth';
-import { BrowserProvider, Wallet, JsonRpcProvider, Contract, parseEther, parseUnits } from 'ethers';
+import { OxGasAuth, OxGasClient, type WalletInfo } from '@0xgasless/core';
+import { AbstractSigner, Wallet, JsonRpcProvider, Contract, parseEther, parseUnits, type Provider, type TransactionRequest } from 'ethers';
 import { useAgent } from './hooks/useAgent';
 import { AgentMessage } from './types/agent';
 import { FUJI_RPC_URL, USDT_TOKEN_ADDRESS } from './config/fuji';
@@ -32,25 +32,92 @@ const TOKEN_ABI = [
   'function approve(address spender, uint256 amount) returns (bool)',
 ];
 
+const client = new OxGasClient({
+  apiKey: import.meta.env.VITE_0XGAS_API_KEY || 'your-0xgas-api-key',
+  chainId: 43113, // Fuji
+  bundlerUrl: 'https://bundler.0xgasless.com/43113',
+  paymasterUrl: `https://paymaster.0xgasless.com/v1/43113/rpc/${import.meta.env.VITE_0XGAS_API_KEY}`,
+  debug: true,
+});
+
+/**
+ * Adapter to make OxGasAuth compatible with ethers.Signer
+ */
+class OxGasEthersSigner extends AbstractSigner {
+  private auth: OxGasAuth;
+  private _address: string;
+
+  constructor(auth: OxGasAuth, address: string, provider: Provider) {
+    super(provider);
+    this.auth = auth;
+    this._address = address;
+  }
+
+  async getAddress(): Promise<string> {
+    return this._address;
+  }
+
+  async signMessage(message: string | Uint8Array): Promise<string> {
+    const result = await this.auth.signMessage(message);
+    return result.signature;
+  }
+
+  async signTransaction(tx: TransactionRequest): Promise<string> {
+    const result = await this.auth.signTransaction({
+      to: tx.to as `0x${string}`,
+      value: tx.value?.toString() || '0',
+      data: tx.data as `0x${string}` || '0x',
+      nonce: tx.nonce !== undefined && tx.nonce !== null ? Number(tx.nonce) : undefined,
+      gas: tx.gasLimit !== undefined && tx.gasLimit !== null ? Number(tx.gasLimit) : undefined,
+      gasPrice: tx.gasPrice !== undefined && tx.gasPrice !== null ? Number(tx.gasPrice) : undefined,
+      maxFeePerGas: tx.maxFeePerGas !== undefined && tx.maxFeePerGas !== null ? Number(tx.maxFeePerGas) : undefined,
+      maxPriorityFeePerGas: tx.maxPriorityFeePerGas !== undefined && tx.maxPriorityFeePerGas !== null ? Number(tx.maxPriorityFeePerGas) : undefined,
+    });
+    return result.rawTx;
+  }
+
+  async sendTransaction(tx: TransactionRequest): Promise<any> {
+    const pop = await this.populateTransaction(tx);
+    // AbstractSigner expects us to return signed hex from signTransaction, 
+    // but we can just use signTransaction results here.
+    const result = await this.auth.signTransaction({
+      to: pop.to as `0x${string}`,
+      value: pop.value?.toString() || '0',
+      data: pop.data as `0x${string}` || '0x',
+      nonce: pop.nonce !== undefined && pop.nonce !== null ? Number(pop.nonce) : undefined,
+      gas: pop.gasLimit !== undefined && pop.gasLimit !== null ? Number(pop.gasLimit) : undefined,
+      gasPrice: pop.gasPrice !== undefined && pop.gasPrice !== null ? Number(pop.gasPrice) : undefined,
+      maxFeePerGas: pop.maxFeePerGas !== undefined && pop.maxFeePerGas !== null ? Number(pop.maxFeePerGas) : undefined,
+      maxPriorityFeePerGas: pop.maxPriorityFeePerGas !== undefined && pop.maxPriorityFeePerGas !== null ? Number(pop.maxPriorityFeePerGas) : undefined,
+    });
+
+    if (result.txHash) {
+      const hash = result.txHash;
+      // Return a partial TransactionResponse
+      return {
+        hash,
+        wait: async () => this.provider!.waitForTransaction(hash),
+      };
+    }
+
+    return this.provider!.broadcastTransaction(result.rawTx);
+  }
+
+  connect(provider: Provider | null): OxGasEthersSigner {
+    return new OxGasEthersSigner(this.auth, this._address, provider!);
+  }
+}
+
 function App() {
-  const privyAppId = import.meta.env.VITE_PRIVY_APP_ID || 'your-privy-app-id';
   return (
-    <PrivyProvider
-      appId={privyAppId}
-      config={{
-        loginMethods: ['email', 'google', 'wallet'],
-        appearance: { theme: 'light', accentColor: '#4c1d95' },
-      }}
-    >
-      <AgentDemo />
-    </PrivyProvider>
+    <AgentDemo />
   );
 }
 
 // ---------- helpers ----------
 
 async function fetchBalances(
-  provider: JsonRpcProvider | BrowserProvider,
+  provider: Provider,
   address: string,
 ): Promise<{ avax: string; usdt: string }> {
   let avax = '0';
@@ -76,14 +143,38 @@ function truncAddr(addr: string) {
 // ---------- Main Demo ----------
 
 function AgentDemo() {
-  const { ready, authenticated, login } = usePrivy();
-  const { wallets } = useWallets();
+  const [ready, setReady] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [wallet, setWallet] = useState<WalletInfo | null>(null);
+
+  useEffect(() => {
+    setReady(true);
+    setAuthenticated(client.isLoggedIn);
+    setWallet(client.auth.getWalletInfo());
+
+    const unsub = client.auth.on('stateChange', (state) => {
+      setAuthenticated(state === 'connected');
+      setWallet(client.auth.getWalletInfo());
+    });
+
+    return () => unsub();
+  }, []);
+
+  const login = async () => {
+    try {
+      const w = await client.login();
+      setWallet(w);
+      setAuthenticated(true);
+    } catch (err) {
+      console.error('Login failed:', err);
+    }
+  };
   const [openRouterKey] = useState(import.meta.env.VITE_OPENROUTER_API_KEY || '');
   const agentA = useAgent('agentA');
   const agentB = useAgent('agentB');
 
   const [rpcProvider] = useState(() => new JsonRpcProvider(FUJI_RPC_URL));
-  const [ownerSigner, setOwnerSigner] = useState<BrowserProvider | null>(null);
+  const [ownerSigner, setOwnerSigner] = useState<OxGasEthersSigner | null>(null);
   const [ownerAddress, setOwnerAddress] = useState('');
   const [agentAWallet, setAgentAWallet] = useState<Wallet | null>(null);
   const [agentBWallet, setAgentBWallet] = useState<Wallet | null>(null);
@@ -138,41 +229,54 @@ function AgentDemo() {
   useEffect(() => {
     let cancelled = false;
     async function init() {
-      if (!ready || !authenticated || !wallets[0] || !agentAWallet || !agentBWallet || initialized) return;
+      if (!ready || !authenticated || !wallet || !agentAWallet || !agentBWallet || initialized) {
+        console.log(`[Init Check] ready:${ready}, auth:${authenticated}, wallet:${!!wallet}, agentA:${!!agentAWallet}, agentB:${!!agentBWallet}, initialized:${initialized}`);
+        return;
+      }
       try {
         setInitError(null);
 
-        // Prefer the user's connected external wallet over Privy's auto-generated embedded wallet
-        const ew = wallets.find(w => w.walletClientType !== 'privy') || wallets[0];
-        console.log(`[Owner] Using wallet: ${ew.address} (type: ${ew.walletClientType})`);
-        console.log(`[Owner] All wallets:`, wallets.map(w => `${w.address} (${w.walletClientType})`));
+        console.log(`[Owner] Using wallet: ${wallet.address}`);
 
-        if (!String(ew.chainId).includes('43113')) { try { await ew.switchChain(43113); await new Promise(r => setTimeout(r, 2000)); } catch {} }
-        const ep = await ew.getEthersProvider();
-        const eip = (ep as any).provider;
-        if (!eip || typeof eip.request !== 'function') throw new Error('Failed to get EIP-1193 provider');
-        const bp = new BrowserProvider(eip);
-        const addr = await (await bp.getSigner()).getAddress();
-        setOwnerSigner(bp);
+        // Create the custom ethers Signer adapter
+        console.log(`[Owner] Creating OxGasEthersSigner adapter...`);
+        const addr = wallet.address;
+        const signer = new OxGasEthersSigner(client.auth, addr, rpcProvider);
+        console.log(`[Owner] OxGasEthersSigner created successfully`);
+        
+        setOwnerSigner(signer);
         setOwnerAddress(addr);
-        if (cancelled) return;
+        if (cancelled) { console.log(`[Init] Cancelled before agentA init`); return; }
+        
+        console.log(`[Init] Initializing Agent A with owner: ${addr}`);
         await agentA.initializeWithSigner(agentAWallet, rpcProvider, addr);
-        if (cancelled) return;
+        console.log(`[Init] Agent A initialized successfully`);
+        
+        if (cancelled) { console.log(`[Init] Cancelled before agentB init`); return; }
+        
+        console.log(`[Init] Initializing Agent B with owner: ${addr}`);
         await agentB.initializeWithSigner(agentBWallet, rpcProvider, addr);
+        console.log(`[Init] Agent B initialized successfully`);
         if (cancelled) return;
+        console.log(`[Init] All agents initialized. Setting initialized=true`);
         setInitialized(true);
-      } catch (e: any) { setInitError(e.message || 'Unknown error'); }
+      } catch (e: any) { 
+        console.error(`[Init] FATAL ERROR:`, e);
+        setInitError(e.message || 'Unknown error'); 
+      } finally {
+        console.log(`[Init] Routine finished`);
+      }
     }
-    if (ready && authenticated && wallets.length > 0 && agentAWallet && agentBWallet && !initialized) init();
+    if (ready && authenticated && wallet && agentAWallet && agentBWallet && !initialized) init();
     return () => { cancelled = true; };
-  }, [ready, authenticated, wallets.length, initialized, agentAWallet, agentBWallet]);
+  }, [ready, authenticated, wallet, initialized, agentAWallet, agentBWallet]);
 
   // ---- Funding ----
   const fundAgent = useCallback(async (agentAddress: string, type: 'avax' | 'usdt', amount: string) => {
     if (!ownerSigner) return;
     setFundingInProgress(true);
     try {
-      const signer = await ownerSigner.getSigner();
+      const signer = ownerSigner;
       if (type === 'avax') { const tx = await signer.sendTransaction({ to: agentAddress, value: parseEther(amount) }); await tx.wait(); }
       else { const token = new Contract(USDT_TOKEN_ADDRESS, TOKEN_ABI, signer); const tx = await token.transfer(agentAddress, parseUnits(amount, 6)); await tx.wait(); }
       await refreshBalances();
@@ -405,7 +509,7 @@ function AgentDemo() {
           <div className="p-4 space-y-4">
 
             {/* Alerts (compact) */}
-            {!initialized && authenticated && wallets.length > 0 && (
+            {!initialized && authenticated && wallet && (
               <div className={`rounded-lg p-3 text-xs ${initError ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'}`}>
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />

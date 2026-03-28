@@ -27,7 +27,7 @@ const address = await wallet.getAddress();
 const sdk = new AgentSDK({
   networks: config.networks,
   defaultNetwork: config.defaultNetwork,
-  signer: privySigner,  // Any ethers.Signer!
+  signer: authSigner,  // Any ethers.Signer!
   provider: provider,
 });
 
@@ -52,13 +52,13 @@ const address = await sdk.getAddress();
 
 ### ✅ `src/App.tsx`
 - **Removed:** Private key from environment variables
-- **Added:** Privy integration
-- **Updated:** Agent initialization to use Privy signers
-- **Updated:** All wallet access to use Privy
+- **Added:** @0xgasless/core integration
+- **Updated:** Agent initialization to use OxGasAuth signers
+- **Updated:** All wallet access to use OxGasAuth
 
 ### ✅ `package.json`
-- **Added:** `@privy-io/react-auth` dependency
-- **Removed:** No longer needs private keys
+- **Added:** `@0xgasless/core` dependency
+- **Removed:** `@privy-io/react-auth`
 
 ---
 
@@ -81,7 +81,7 @@ const address = await sdk.getAddress();
 - [x] No `privateKey` usage in codebase
 - [x] No `getWallet()` calls
 - [x] All SDK initialization uses `signer` parameter
-- [x] Privy integration added
+- [x] @0xgasless/core integration added
 - [x] Agent initialization uses `initializeWithSigner()`
 - [x] Payment flow uses new SDK API
 - [x] Registration flow uses new SDK API
@@ -94,7 +94,7 @@ const address = await sdk.getAddress();
 ✅ **Fully Migrated** - The agent-frontend-demo is now using the wallet-agnostic SDK correctly!
 
 ### What Works:
-- ✅ Privy wallet integration
+- ✅ @0xgasless/core wallet integration
 - ✅ Agent initialization with signers
 - ✅ ERC-8004 registration
 - ✅ x402 payments
@@ -103,9 +103,9 @@ const address = await sdk.getAddress();
 
 ### What's Different:
 - ✅ No private keys needed
-- ✅ Uses Privy for wallet management
+- ✅ Uses @0xgasless/core for wallet management
 - ✅ Wallet-agnostic architecture
-- ✅ Works with any wallet provider
+- ✅ Works with any wallet provider via KMS signing
 
 ---
 
