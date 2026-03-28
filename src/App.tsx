@@ -1,6 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { OxGasAuth, OxGasClient, type WalletInfo } from '@0xgasless/core';
-import { AbstractSigner, Wallet, JsonRpcProvider, Contract, parseEther, parseUnits, type Provider, type TransactionRequest } from 'ethers';
+import {
+  AbstractSigner,
+  Wallet,
+  JsonRpcProvider,
+  Contract,
+  parseEther,
+  parseUnits,
+  TypedDataEncoder,
+  type Provider,
+  type TransactionRequest,
+  type TypedDataDomain,
+  type TypedDataField,
+} from 'ethers';
 import { useAgent } from './hooks/useAgent';
 import { AgentMessage } from './types/agent';
 import { FUJI_RPC_URL, USDT_TOKEN_ADDRESS } from './config/fuji';
@@ -59,6 +71,16 @@ class OxGasEthersSigner extends AbstractSigner {
 
   async signMessage(message: string | Uint8Array): Promise<string> {
     const result = await this.auth.signMessage(message);
+    return result.signature;
+  }
+
+  async signTypedData(
+    domain: TypedDataDomain,
+    types: Record<string, TypedDataField[]>,
+    value: Record<string, unknown>
+  ): Promise<string> {
+    const digest = TypedDataEncoder.hash(domain, types, value);
+    const result = await this.auth.signMessage(digest);
     return result.signature;
   }
 
